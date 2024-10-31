@@ -5,37 +5,41 @@ gracefull updates and multiple django projects on same memcached instance.
 Long keys (>250) are truncated and appended with md5 hash.
 """
 
-import uuid
-import logging
-import sys
 import time
-from django.core.cache.backends.memcached import CacheClass as MemcachedCacheClass
+import uuid
+
 from django.conf import settings
+from django.core.cache.backends.memcached import MemcachedCache
 from django.utils.encoding import smart_str
 
 from cache_utils.utils import sanitize_memcached_key
+
 
 # This prefix is appended to the group name to prevent cache key clashes.
 _VERSION_PREFIX = getattr(settings, 'VERSION', "")
 _KEY_PREFIX = "_group::"
 
-
 # MINT_DELAY is an upper bound on how long any value should take to
 # be generated (in seconds)
 MINT_DELAY = 30
 
-class CacheClass(MemcachedCacheClass):
+
+class CacheClass(MemcachedCache):
+
+    def _get_real_timeout(self, timeout):
+        return timeout or self.default_timeout
 
     def add(self, key, value, timeout=0, group=None):
         key = self._make_key(group, key)
 
+        timeout = self._get_real_timeout(timeout)
         refresh_time = timeout + time.time()
         real_timeout = timeout + MINT_DELAY
         packed_value = (value, refresh_time, False)
 
         return super(CacheClass, self).add(key, packed_value, real_timeout)
 
-    def get(self, key, default=None, group=None):
+    def get(self, key, version=None, default=None, group=None):
         key = self._make_key(group, key)
         packed_value = super(CacheClass, self).get(key, default)
         if packed_value is None:
@@ -50,6 +54,7 @@ class CacheClass(MemcachedCacheClass):
 
     def set(self, key, value, timeout=0, group=None, refreshed=False):
         key = self._make_key(group, key)
+        timeout = self._get_real_timeout(timeout)
         refresh_time = timeout + time.time()
         real_timeout = timeout + MINT_DELAY
         packed_value = (value, refresh_time, refreshed)
@@ -105,19 +110,19 @@ class CacheClass(MemcachedCacheClass):
 # NotImplementedError for them.
 
     def incr(self, key, delta=1, group=None):
-#        if group:
-#            key = self._make_key(group, key)
-#        return super(CacheClass, self).incr(key, delta)
+        # if group:
+        #     key = self._make_key(group, key)
+        # return super(CacheClass, self).incr(key, delta)
         raise NotImplementedError
 
     def decr(self, key, delta=1, group=None):
-#        if group:
-#            key = self._make_key(group, key)
-#        return super(CacheClass, self).decr(key, delta)
+        # if group:
+        #     key = self._make_key(group, key)
+        # return super(CacheClass, self).decr(key, delta)
         raise NotImplementedError
 
     def get_many(self, keys, group=None):
-#        hashkey = self._get_hashkey(group)
-#        keys = [self._make_key(group, k, hashkey) for k in keys]
-#        return super(CacheClass, self).get_many(keys)
+        # hashkey = self._get_hashkey(group)
+        # keys = [self._make_key(group, k, hashkey) for k in keys]
+        # return super(CacheClass, self).get_many(keys)
         raise NotImplementedError
